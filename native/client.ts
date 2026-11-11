@@ -1,5 +1,5 @@
 import {Platform} from 'react-native';
-import {nativePasskeyError} from './passkey-errors';
+import {nativePasskeyError} from '../src/native-passkey-errors';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import * as Browser from 'expo-web-browser';
