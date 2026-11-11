@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.worker/
+.env*
+.dev.vars*
+*.log
+.expo/
+coverage/
+.wrangler/
+.cloudflare/
+.release/
+playwright-report/
+test-results/

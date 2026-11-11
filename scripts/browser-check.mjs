@@ -1,0 +1,21 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+const browser=await chromium.launch();
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+await page.route('https://id.starry.phd/**',async route=>{
+ if(route.request().url().includes('/v1/apps/life/config'))return route.fulfill({json:{status:'active',app_id:'life',min_version:'0.0.0',config:{},notices:[]}});
+ return route.fulfill({status:401,json:{error:{code:'UNAUTHORIZED'}}});
+});
+await page.addInitScript(()=>{sessionStorage.setItem('starry.ssochecked.life',String(Date.now()));});
+await page.goto(process.env.LIFE_TEST_URL??'http://127.0.0.1:5173');
+await page.getByRole('heading',{name:'每個數字， 都藏著你的可能。'}).waitFor();
+await page.screenshot({path:'/private/tmp/life-desktop.png',fullPage:true});
+await page.locator('#birthday').fill('1992-02-03');await page.locator('#chart-form button').click();
+await page.getByRole('heading',{name:'看見你的天賦輪廓'}).waitFor();assert.equal(await page.locator('svg.ln-svg').count(),1);
+await page.reload();await page.getByRole('heading',{name:'看見你的天賦輪廓'}).waitFor();
+await page.getByRole('link',{name:'知識庫',exact:true}).click();await page.locator('#query').fill('安全感');await page.locator('#category-filter').selectOption('家庭');await page.locator('#search-form button').click();assert.ok(await page.locator('.source-block').count()>0);
+await page.goBack();await page.goForward();assert.ok(page.url().includes('category='));
+await page.setViewportSize({width:390,height:844});await page.getByRole('link',{name:'我的命盤',exact:true}).click();await page.getByRole('heading',{name:'看見你的天賦輪廓'}).waitFor();
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.screenshot({path:'/private/tmp/life-mobile.png',fullPage:true});
+console.log('Browser checks passed: chart, reload, search/category, back/forward, mobile overflow.');await browser.close();
