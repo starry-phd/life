@@ -1,0 +1,33 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run generate:api && git diff --exit-code src/generated/starry-api.ts
+      - run: npm run ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: life-web-and-worker
+          path: |
+            dist
+            .worker
+          include-hidden-files: true
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan committed history with central rules
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --config /repo/.gitleaks.toml --redact
