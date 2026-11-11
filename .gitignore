@@ -11,3 +11,5 @@ coverage/
 .release/
 playwright-report/
 test-results/
+native/ios/
+native/android/

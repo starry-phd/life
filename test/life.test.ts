@@ -35,3 +35,6 @@ describe('HTTP security boundary',()=>{
  it('rejects cross-origin authenticated mutations',async()=>{const result=await worker.fetch(new Request('https://life.starry.phd/api/admin/config',{method:'POST',headers:{Origin:'https://evil.example'},body:'{}'}),{ASSETS:{fetch:vi.fn()}});expect(result.status).toBe(403);});
  it('does not start tasks during central maintenance',async()=>{const original=globalThis.fetch;globalThis.fetch=vi.fn().mockResolvedValue(Response.json({status:'paused'}));try{const result=await worker.fetch(new Request('https://life.starry.phd/api/analyze',{method:'POST'}),{ASSETS:{fetch:vi.fn()}});expect(result.status).toBe(503);}finally{globalThis.fetch=original;}});
 });
+
+import {nativePasskeyError} from '../native/passkey-errors';
+it('normalizes native cancellation and existing Passkey for the official SDK',()=>{expect(nativePasskeyError({error:'UserCancelled'}).name).toBe('UserCancelled');expect(nativePasskeyError({error:'CredentialAlreadyExists'}).name).toBe('InvalidStateError');});
