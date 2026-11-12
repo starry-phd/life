@@ -34,6 +34,6 @@
 
 ## 業主確實需要處理
 
-Cloudflare → yukidu@gmail.com → Workers & Pages → life-api → Settings → Variables and Secrets → Add → Secret，名稱 `STARRY_BATTERY_KEY`，填入中央為 life 提供的服務金鑰。不要貼入聊天、GitHub 或前端。測試環境要驗收扣款時，對 life-api-staging 另設定 Secret，並於驗收時啟用 AI。
+遷移完成後：Cloudflare → starry.phd@gmail.com → Workers & Pages → life-api → Settings → Variables and Secrets → Add → Secret，名稱 `STARRY_BATTERY_KEY`，填入中央為 life 提供的服務金鑰。不要貼入聊天、GitHub 或前端。測試環境要驗收扣款時，對 life-api-staging 另設定 Secret，並於驗收時啟用 AI。
 
 原生 Android 上架/內測前，於中央 Admin Lite 登記對應實際安裝 APK 的 SHA-256：Play Console 的 App signing key certificate（不是 Upload key）；EAS 內測透過 eas credentials -p android；本機 APK 透過 apksigner verify --print-certs。不同簽章各登記一組。

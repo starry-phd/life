@@ -1,8 +1,14 @@
 // Direct API deployment for the connected-account workflow. Never writes credentials to disk.
 import fs from 'node:fs';import path from 'node:path';
+import {assertDeploymentAccount} from './deployment-account.mjs';
 const mode=process.argv[2];if(!['staging','production'].includes(mode))throw new Error('Usage: node scripts/deploy.mjs staging|production');
 const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN,database=process.env.KNOWLEDGE_DATABASE_ID,kv=process.env.SETTINGS_NAMESPACE_ID;
 if(!account||!token||!database||!kv)throw new Error('Missing deployment environment variables');
+const accountResponse=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}`,{headers:{Authorization:`Bearer ${token}`}});
+if(!accountResponse.ok)throw new Error('無法驗證部署帳戶，已停止');
+const accountResult=await accountResponse.json();
+if(!accountResult.success)throw new Error('帳戶驗證失敗，已停止');
+assertDeploymentAccount(accountResult.result);
 const name=mode==='staging'?'life-api-staging':'life-api';
 const form=new FormData(),imports=[],map=[];let i=0;
 function walk(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory())walk(full);else{const url='/'+path.relative('dist',full);if(url.includes('wrangler')||url==='/.assetsignore')continue;const module=`asset${i}.bin`;const mime=({'.html':'text/html;charset=utf-8','.js':'application/javascript','.css':'text/css','.jpg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml'})[path.extname(full)]??'application/octet-stream';imports.push(`import a${i} from './${module}';`);map.push(`${JSON.stringify(url)}:{body:a${i},type:${JSON.stringify(mime)}}`);form.append(module,new Blob([fs.readFileSync(full)],{type:'application/octet-stream'}),module);i++;}}}walk('dist');
