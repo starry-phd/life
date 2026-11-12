@@ -2,20 +2,19 @@
 
 使用者於 2026-11-12 更正：唯一可開發及部署帳戶為 starry.phd@gmail.com，禁止在 yukidu@gmail.com 開發任何 App。
 
-## 已查核
-- 目標帳戶名稱經 API 確認為 starry.phd@gmail.com。
-- 目標已有 life-domain 與 life.starry.phd；尚無 Life D1、KV、life-api 或 life-api-staging。
-- 來源正式 D1：305 個原文區塊、14,956 字；正式 KV 無設定資料。
-- 來源 life-api 尚無 STARRY_BATTERY_KEY；AI 開關已開，但沒有金鑰不會執行。
-- 全域及專案 AGENTS.md 已寫入永久規則；部署腳本在任何寫入前驗證帳戶名稱。
+## 已完成（2026-11-12）
+- 已取得建立兩個 Worker、兩個 D1、兩個 KV、相關用量費用、切換網域及停用舊端點的明確核准。
+- API 確認目標帳戶名稱為 starry.phd@gmail.com。
+- 新 Worker：life-api-staging、life-api。
+- 新 D1：life-knowledge-staging、life-knowledge；正式資料庫 305/305 段逐字相同，共14,956字。
+- 新 KV：life-settings-staging、life-settings；來源兩套 KV 皆無設定資料。
+- life.starry.phd 已直接綁定此帳戶的 life-api，不再跨帳戶轉發。
+- 新 staging 的命盤、搜尋/分類、刷新、上一頁/下一頁及手機版測試通過。
+- 切換後正式匿名 SSO 往返與命盤測試通過；19/19 張原圖 SHA-256 完全一致。
+- 舊 yukidu@gmail.com 的 life-api、life-api-staging：workers.dev 與 preview 端點皆停用，AI_ENABLED=false。
+- 舊 life-domain 已解除正式網域、停用公開端點；保留程式但不再服務。
+- 舊 D1、KV 與 Worker 保留備份，未刪除；既有 life-starry 未修改。
+- 全域及專案 AGENTS.md 已寫入永久規則；部署工具會先驗證 account.name，錯誤或無法驗證一律阻擋。
 
-## 待核准的具體遷移
-在 starry.phd@gmail.com 建立：
-- D1：life-knowledge-staging、life-knowledge
-- KV：life-settings-staging、life-settings
-- Workers：life-api-staging、life-api（含 Workers AI binding）
-
-先匯入全文、部署 staging，逐段與逐圖驗證；CI 全綠後部署 production；將 life.starry.phd 從同帳戶的 life-domain 改為直接綁定 life-api。確認匿名 SSO、命盤、原文搜尋與 API 狀態後，停用舊帳戶 Life 的公開 workers.dev 端點與 AI 開關。保留舊資料及 Worker，不刪除任何既有資源。
-
-## 阻擋原因
-自動核准審查拒絕建立 life-knowledge-staging，理由：建立持久 D1 資料庫可能產生費用，使用者原規則要求個別核准。上述建立與遷移可能按目標付費帳戶用量計費，尚未執行；網站目前仍由舊部署服務。
+## 尚需設定
+新付費帳戶的 life-api 尚無 STARRY_BATTERY_KEY。正式 AI_ENABLED=true（已有用量授權），但缺少服務金鑰時不會預留電池或執行 AI。請只在新帳戶的 Workers Secret 設定，不要再於舊帳戶設定或部署。
