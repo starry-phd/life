@@ -30,10 +30,10 @@
 
 - 有登入身分的 Apple/Google/Passkey、跨 App 真實 SSO、實機 Keychain、owner 操作、真實 Battery/AI 端到端。
 - 未建置簽署 APK/IPA、未提交或發布 App Store/Google Play。
-- AI 用量已獲業主授權、production AI_ENABLED 已啟用；服務 Secret 尚未提供，因此目前不會執行 AI。
+- AI 用量已獲業主授權；遷移後 production AI_ENABLED 已啟用，STARRY_BATTERY_KEY Secret 已存在，健康檢查 ai_ready=true。尚未以真實會員驗收解讀及扣款。
 
-## 業主確實需要處理
+## 後續驗收
 
-遷移完成後：Cloudflare → starry.phd@gmail.com → Workers & Pages → life-api → Settings → Variables and Secrets → Add → Secret，名稱 `STARRY_BATTERY_KEY`，填入中央為 life 提供的服務金鑰。不要貼入聊天、GitHub 或前端。測試環境要驗收扣款時，對 life-api-staging 另設定 Secret，並於驗收時啟用 AI。
+正式環境已偵測到服務 Secret，無須重複設定。真實會員 AI/扣款與跨 App 登入仍待驗收；所有 Secret 僅放在 starry.phd@gmail.com 的 Workers Secrets，不貼入聊天、GitHub 或前端。
 
 原生 Android 上架/內測前，於中央 Admin Lite 登記對應實際安裝 APK 的 SHA-256：Play Console 的 App signing key certificate（不是 Upload key）；EAS 內測透過 eas credentials -p android；本機 APK 透過 apksigner verify --print-certs。不同簽章各登記一組。

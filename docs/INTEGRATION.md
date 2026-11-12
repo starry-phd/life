@@ -36,6 +36,6 @@ AI 從 D1 讀取完整原文，另讀取所選方向的段落索引；資料庫�
 
 ## 部署
 
-前端與19張圖以 Worker binary modules 封裝，因連接工具無法替靜態資產上傳傳遞獨立 upload JWT。`scripts/deploy.mjs` 可重現此部署；使用環境變數 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`KNOWLEDGE_DATABASE_ID`、`SETTINGS_NAMESPACE_ID`，不存入 Git。先建置及部署 staging，驗證後才部署 production。正確帳戶為 **starry.phd@gmail.com**。禁止在 yukidu@gmail.com 開發或部署。既有部署目前仍在舊帳戶，遷移因新持久資源的費用核准而暫停；核准後將正式網域直接綁定正確帳戶的 life-api，並停用舊公開端點。舊資源保留備份，不刪除；既有 life-starry 不修改。
+前端與19張圖以 Worker binary modules 封裝，因連接工具無法替靜態資產上傳傳遞獨立 upload JWT。`scripts/deploy.mjs` 可重現此部署；使用環境變數 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`KNOWLEDGE_DATABASE_ID`、`SETTINGS_NAMESPACE_ID`，不存入 Git。先建置及部署 staging，驗證後才部署 production。正確帳戶為 **starry.phd@gmail.com**。禁止在 yukidu@gmail.com 開發或部署。使用者已核准資源、費用與遷移。2026-11-12 已完成：正式網域直接綁定正確帳戶的 life-api；life-api-staging、兩套 D1 與 KV 均在此帳戶。舊 Life Worker 的 workers.dev、預覽端點及 AI 均已停用。舊資源保留備份，不刪除；既有 life-starry 不修改。
 
 正式全文比對：305/305段文字相同，差異0；D1 FTS搜尋「安全感」可命中6筆。
