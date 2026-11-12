@@ -18,3 +18,9 @@ Node 22+，`npm ci`、`npm run dev`。`npm run ci` 執行型別、算法/電池�
 採用 **2026-11-09.6**。細節與尚需驗收項目見 [INTEGRATION](docs/INTEGRATION.md)。main 僅由 PR 合併，CI 與 gitleaks 必須全綠。中央 ID 程式與資料一律不修改。
 
 `STARRY_BATTERY_KEY` 只能存在 Workers Secrets。AI 未設定時明確顯示未啟用，絕不繞過電池直接呼叫 AI。
+
+## 原生 iOS / Android
+
+`cd native && npm ci && npm start` 使用 development build。`npm run typecheck && npm run export` 驗證原生來源及兩平台 bundle。主要畫面為 React Native，只有中央會員資料頁使用 App 內瀏覽器。
+
+完整實測／未驗證邊界與必要業主設定見 [驗收清單](docs/ACCEPTANCE.md)。

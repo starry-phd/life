@@ -31,3 +31,17 @@ jobs:
           fetch-depth: 0
       - name: Scan committed history with central rules
         run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --config /repo/.gitleaks.toml --redact
+
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: native/package-lock.json
+      - run: npm ci
+        working-directory: native
+      - run: npm run typecheck && npm run export
+        working-directory: native
