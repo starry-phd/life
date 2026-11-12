@@ -1,7 +1,9 @@
+import {memberInput} from './member-records';
+import type {paths} from './generated/starry-api';
 import {AI_MODELS,DEFAULT_AI_SETTINGS,AI_BILLING_NOTE,validAiSettings,cleanArticle,articleFromOutput,type AiOutput} from './ai-settings';
 import {createRemoteJWKSet,jwtVerify} from 'jose';
 import {Starry,StarryError} from '../vendor/starry-sdk';
-import {calculate,categories,type ChartInput,type Category} from './numerology';
+import {calculate,categories,validBirthday,type ChartInput,type Category} from './numerology';
 import {buildPrompt,knowledge} from './knowledge';
 import type {Me} from '../vendor/starry-client';
 interface KnowledgeRow {id:number;text:string;heading:string;topic:string;line:string|null}
@@ -20,12 +22,12 @@ const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache
 class HttpError extends Error{constructor(public status:number,public code:string,message:string){super(message);}}
 const centralFetch:typeof fetch=(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(12000)});
 async function identity(request:Request,starry:Starry){const token=request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1];if(!token)throw new HttpError(401,'UNAUTHORIZED','請先登入繁星會員');
- try{const {payload}=await jwtVerify(token,jwks,{issuer:'starry-id:production',audience:'starry',algorithms:['ES256'],requiredClaims:['exp','sub','app_id']});if(payload.app_id!=='life')throw new Error('app');}catch{throw new HttpError(401,'UNAUTHORIZED','登入已到期，請重新登入');}
- const me=await starry.me(token) as Me;if(me.status!=='active')throw new HttpError(403,'INACTIVE','會員目前無法使用此功能');if(me.consent.required)throw new HttpError(403,'CONSENT_REQUIRED','請先同意最新條款');return {token,me};}
+ let userId:string;try{const {payload}=await jwtVerify(token,jwks,{issuer:'starry-id:production',audience:'starry',algorithms:['ES256'],requiredClaims:['exp','sub','app_id']});if(payload.app_id!=='life'||typeof payload.sub!=='string')throw new Error('app');userId=payload.sub;}catch{throw new HttpError(401,'UNAUTHORIZED','登入已到期，請重新登入');}
+ const me=await starry.me(token) as Me;if(me.user_id!==userId)throw new HttpError(401,'UNAUTHORIZED','會員身分不一致');if(me.status!=='active')throw new HttpError(403,'INACTIVE','會員目前無法使用此功能');if(me.consent.required)throw new HttpError(403,'CONSENT_REQUIRED','請先同意最新條款');return {token,me};}
 export async function readBody(request:Request,limit=2048){if(Number(request.headers.get('content-length')??0)>limit)throw new HttpError(413,'TOO_LARGE','資料過長');const reader=request.body?.getReader();if(!reader)throw new HttpError(400,'BAD_REQUEST','缺少資料');let text='';let bytes=0;const decoder=new TextDecoder();while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>limit){await reader.cancel();throw new HttpError(413,'TOO_LARGE','資料過長');}text+=decoder.decode(value,{stream:true});}try{return JSON.parse(text+decoder.decode()) as Record<string,unknown>;}catch{throw new HttpError(400,'BAD_REQUEST','資料格式錯誤');}}
 async function units(env:Env){const value=Number(await env.SETTINGS?.get('units')??1);if(!Number.isInteger(value)||value<1||value>100)throw new HttpError(503,'CONFIG_ERROR','服務設定暫時無法使用');return value;}
 export async function aiSettings(env:Env){const raw=await env.SETTINGS?.get('ai-settings');if(!raw)return {...DEFAULT_AI_SETTINGS};let value:unknown;try{value=JSON.parse(raw);}catch{throw new HttpError(503,'CONFIG_ERROR','AI 設定暫時無法使用');}if(!validAiSettings(value))throw new HttpError(503,'CONFIG_ERROR','AI 設定暫時無法使用');return value;}
-export async function runAnalysis(starry:Starry,token:string,env:Env,input:ChartInput,category:Category,cost:number){
+export async function runAnalysis(starry:Starry,token:string,env:Env,input:ChartInput,category:Category,cost:number,archive?:{prepare:(result:unknown)=>Promise<void>;complete:()=>Promise<void>;discard:()=>Promise<void>}){
  if(!env.AI||env.AI_ENABLED!=='true'||!env.STARRY_BATTERY_KEY)throw new HttpError(503,'AI_NOT_READY','AI 解讀尚未啟用，命盤與全文知識庫可正常使用。');
  const chart=calculate(input);
  if(!env.KNOWLEDGE)throw new HttpError(503,'KNOWLEDGE_NOT_READY','原文索引暫時無法使用');
@@ -38,8 +40,8 @@ export async function runAnalysis(starry:Starry,token:string,env:Env,input:Chart
  let committed=false;
  try{const result=await env.AI.run(settings.model,{messages,max_tokens:2400,...(settings.model.includes('glm-4.7')||settings.model.includes('gemma-4')?{chat_template_kwargs:{enable_thinking:false}}:{})});const article=articleFromOutput(result).replace(/<think>[\s\S]*?<\/think>/gi,'');if(article.trim().length<20)throw new HttpError(502,'EMPTY_RESPONSE','AI 未產生完整解讀，請稍後再試');
  const refs=[...new Set([...article.matchAll(/原文段落\s*(\d+)/g)].map(x=>Number(x[1])))];if(!refs.length||refs.some(n=>!knowledge.blocks.some(b=>b.id===n)))throw new HttpError(502,'INVALID_REFERENCE','解讀依據未通過檢查，請稍後再試');
- const text=cleanArticle(article);if(text.length<20)throw new HttpError(502,'EMPTY_RESPONSE','AI 未產生完整解讀，請稍後再試');await starry.commit(reservation.reservation_id);committed=true;return {text,references:refs};
- }finally{if(!committed)await starry.release(reservation.reservation_id).catch(()=>{/* Central reservations expire; never expose a result before confirmed billing. */});}
+ const text=cleanArticle(article);if(text.length<20)throw new HttpError(502,'EMPTY_RESPONSE','AI 未產生完整解讀，請稍後再試');const answer={text,references:refs,model:settings.model};await archive?.prepare(answer);await starry.commit(reservation.reservation_id);committed=true;let saved=true;if(archive){try{await archive.complete();}catch{try{await archive.complete();}catch{saved=false;}}}return {...answer,saved};
+ }finally{if(!committed){await starry.release(reservation.reservation_id).catch(()=>{/* Central reservations expire. */});await archive?.discard().catch(()=>{/* Pending records are never visible. */});}}
 }
 export default {async fetch(request:Request,env:Env):Promise<Response>{try{const url=new URL(request.url);if(!url.pathname.startsWith('/api/'))return env.ASSETS.fetch(request);
  if(url.pathname==='/api/health')return json({app:'life',version:'0.1.0',handoff:'2026-11-09.6',ai_ready:!!env.STARRY_BATTERY_KEY&&env.AI_ENABLED==='true'});
@@ -47,8 +49,36 @@ export default {async fetch(request:Request,env:Env):Promise<Response>{try{const
  const origin=request.headers.get('origin');if(origin&&origin!==url.origin&&origin!=='https://life.starry.phd')throw new HttpError(403,'ORIGIN','來源不允許');
  const configResponse=await centralFetch(BASE+'/v1/apps/life/config');if(!configResponse.ok)throw new HttpError(503,'SERVICE_UNAVAILABLE','中央服務暫時無法連線');const config=await configResponse.json() as {status:string};if(config.status!=='active')throw new HttpError(503,'SERVICE_UNAVAILABLE','目前維護中，請稍後再試');
  const starry=new Starry({baseUrl:BASE,serviceKey:env.STARRY_BATTERY_KEY,fetch:centralFetch});const {token,me}=await identity(request,starry);
+
+ if(url.pathname==='/api/me/input'&&request.method==='GET'){const initial=memberInput(me);if(env.KNOWLEDGE){const r=await env.KNOWLEDGE.prepare("SELECT payload FROM life_records WHERE user_id=? AND subject='self' AND status='ready' ORDER BY created_at DESC,id DESC LIMIT 1").bind(me.user_id).all<{payload:string}>();if(r.results[0]){const saved=JSON.parse(r.results[0].payload).input;initial.mode=saved.mode==='article'?'article':'original';initial.blood=['A','B','AB','O'].includes(saved.blood)?saved.blood:'unknown';}}return json(initial);}
+ if(url.pathname==='/api/me/birthday'&&request.method==='POST'){
+ const data=await readBody(request);if(data.confirmed!==true||typeof data.birthday!=='string'||!validBirthday(data.birthday))throw new HttpError(400,'CONFIRM_REQUIRED','請先確認是否新增為本人的生日');
+ if(me.profile.birthday)throw new HttpError(409,'BIRTHDAY_EXISTS','中央會員已有生日，請重新載入；如需修改請前往會員中心');
+ if(!Number.isInteger(me.profile.version))throw new HttpError(503,'PROFILE_VERSION','會員資料版本暫時無法取得');
+ const patch:paths['/v1/me/profile']['patch']['requestBody']['content']['application/json']={birthday:data.birthday};
+ // The official SDK has no profile PATCH/If-Match method; use the generated API contract.
+ const response=await centralFetch(BASE+'/v1/me/profile',{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','If-Match':`"${me.profile.version}"`},body:JSON.stringify(patch)});
+ if(response.status===409)throw new HttpError(409,'PROFILE_CHANGED','中央資料已在其他地方更新，請重新載入後確認');
+ if(!response.ok)throw new HttpError(response.status,'PROFILE_SAVE_FAILED','生日尚未儲存，請稍後再試');
+ return json({saved:true,birthday:data.birthday});
+ }
+ if(url.pathname==='/api/records'&&request.method==='GET'){
+ if(!env.KNOWLEDGE)throw new HttpError(503,'RECORDS_UNAVAILABLE','紀錄暫時無法載入');
+ const mine=url.searchParams.get('scope')==='self';const before=Number(url.searchParams.get('before')??Number.MAX_SAFE_INTEGER);const afterId=url.searchParams.get('afterId')??'~';if(!Number.isSafeInteger(before)||before<0)throw new HttpError(400,'INVALID_CURSOR','紀錄頁碼錯誤');
+ const rows=await env.KNOWLEDGE.prepare(`SELECT id,name,birthday,subject,category,created_at FROM life_records WHERE user_id=? AND status='ready' ${mine?"AND subject='self'":''} AND (created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 31`).bind(me.user_id,before,before,afterId).all<{created_at:number;id:string}>();const items=rows.results.slice(0,30);return json({items,next:rows.results.length>30?items[items.length-1]!.created_at:null,nextId:rows.results.length>30?items[items.length-1]!.id:null});
+ }
+ if(url.pathname.startsWith('/api/records/')&&request.method==='GET'){
+ if(!env.KNOWLEDGE)throw new HttpError(503,'RECORDS_UNAVAILABLE','紀錄暫時無法載入');const recordId=url.pathname.slice('/api/records/'.length);
+ const rows=await env.KNOWLEDGE.prepare("SELECT id,name,birthday,subject,category,created_at,payload FROM life_records WHERE user_id=? AND id=? AND status='ready'").bind(me.user_id,recordId).all<{payload:string}>();if(!rows.results[0])throw new HttpError(404,'RECORD_NOT_FOUND','找不到這筆紀錄');return json({...rows.results[0],result:JSON.parse(rows.results[0].payload),payload:undefined});
+ }
  if(url.pathname==='/api/quote'&&request.method==='GET')return json({units:await units(env)});
  if(url.pathname==='/api/admin/ai'){if(me.staff_role!=='owner')throw new HttpError(403,'FORBIDDEN','僅限超級管理員');if(request.method==='POST'){const data=await readBody(request,40000);if(!validAiSettings(data))throw new HttpError(400,'INVALID_AI_SETTINGS','請選擇支援的模型，備註最多 8000 字');if(!env.SETTINGS)throw new HttpError(503,'CONFIG_UNAVAILABLE','設定儲存尚未配置');await env.SETTINGS.put('ai-settings',JSON.stringify({model:data.model,notes:data.notes}));return json({model:data.model,notes:data.notes});}if(request.method!=='GET')throw new HttpError(405,'METHOD','不支援此操作');return json({...await aiSettings(env),models:AI_MODELS,billingNote:AI_BILLING_NOTE,defaults:DEFAULT_AI_SETTINGS});}
  if(url.pathname==='/api/admin/config'){if(me.staff_role!=='owner')throw new HttpError(403,'FORBIDDEN','僅限超級管理員');if(request.method==='POST'){const data=await readBody(request);if(!Number.isInteger(data.units)||Number(data.units)<1||Number(data.units)>100)throw new HttpError(400,'INVALID_UNITS','顆數須為 1–100 的整數');if(!env.SETTINGS)throw new HttpError(503,'CONFIG_UNAVAILABLE','設定儲存尚未配置');await env.SETTINGS.put('units',String(data.units));}else if(request.method!=='GET')throw new HttpError(405,'METHOD','不支援此操作');return json({units:await units(env),ready:!!env.STARRY_BATTERY_KEY&&env.AI_ENABLED==='true'});}
- if(url.pathname==='/api/analyze'&&request.method==='POST'){const data=await readBody(request);if(typeof data.birthday!=='string'||!['original','article'].includes(String(data.mode))||!['unknown','A','B','AB','O'].includes(String(data.blood))||!categories.includes(data.category as Category))throw new HttpError(400,'INVALID_INPUT','請確認生日、規則與解讀方向');let input:ChartInput;try{input={birthday:data.birthday,mode:data.mode as ChartInput['mode'],blood:data.blood as ChartInput['blood']};calculate(input);}catch{throw new HttpError(400,'INVALID_BIRTHDAY','請輸入有效的西元生日');}return json(await runAnalysis(starry,token,env,input,data.category as Category,await units(env)));}
+ if(url.pathname==='/api/analyze'&&request.method==='POST'){const data=await readBody(request);if(typeof data.birthday!=='string'||!['original','article'].includes(String(data.mode))||!['unknown','A','B','AB','O'].includes(String(data.blood))||!categories.includes(data.category as Category))throw new HttpError(400,'INVALID_INPUT','請確認生日、規則與解讀方向');let input:ChartInput;try{input={birthday:data.birthday,mode:data.mode as ChartInput['mode'],blood:data.blood as ChartInput['blood']};calculate(input);}catch{throw new HttpError(400,'INVALID_BIRTHDAY','請輸入有效的西元生日');}const name=typeof data.name==='string'?data.name.trim():'';if(name.length>50)throw new HttpError(400,'INVALID_NAME','姓名最多 50 字');const subject=data.subject==='self'?'self':'other';if(subject==='self'&&me.profile.birthday!==input.birthday)throw new HttpError(409,'SELF_BIRTHDAY_MISMATCH','本人的生日須與中央會員資料相同，請先確認生日');
+ if(!env.KNOWLEDGE)throw new HttpError(503,'RECORDS_UNAVAILABLE','紀錄儲存尚未配置');const db=env.KNOWLEDGE,id=crypto.randomUUID(),created=Date.now();const recordInput={...input,name,subject};
+ const result=await runAnalysis(starry,token,env,input,data.category as Category,await units(env),{
+ prepare:async answer=>{await db.prepare("INSERT INTO life_records(id,user_id,subject,name,birthday,category,created_at,payload,status) VALUES(?,?,?,?,?,?,?,?,'pending')").bind(id,me.user_id,subject,name,input.birthday,data.category,created,JSON.stringify({input:recordInput,chart:calculate(input),...answer as object})).all();},
+ complete:async()=>{await db.prepare("UPDATE life_records SET status='ready' WHERE id=? AND user_id=?").bind(id,me.user_id).all();},
+ discard:async()=>{await db.prepare("DELETE FROM life_records WHERE id=? AND user_id=? AND status='pending'").bind(id,me.user_id).all();}
+ });return json({...result,recordId:result.saved?id:null});}
  throw new HttpError(404,'NOT_FOUND','找不到此功能');}catch(e){if(e instanceof HttpError)return json({error:{code:e.code,message:e.message}},e.status);if(e instanceof StarryError)return json({error:{code:e.code,message:e.code==='BATTERY_INSUFFICIENT'?'🔋 免費額度與 ⚛️ 量子電池不足':e.code==='BATTERY_APP_CAP'?'本月使用量已達上限，請稍後再試':'中央服務暫時無法使用，請稍後再試'}},e.status>=400&&e.status<600?e.status:503);return json({error:{code:'SERVICE_UNAVAILABLE',message:'服務暫時無法使用，請稍後再試'}},503);}}};
