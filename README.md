@@ -1,6 +1,6 @@
 # Life · 生命靈數
 
-獨立生日命盤、全文知識庫與八大方向 AI 解讀。網域 `life.starry.phd`，中央會員 `id.starry.phd`，後端 `life-api`。
+獨立生日命盤、全文知識庫與八大方向 AI 解讀。網域 `life.starry.phd`，中央會員 `id.starry.phd`，後端 `life-api`。Cloudflare 僅允許 **starry.phd@gmail.com** 付費帳戶，禁止在 yukidu@gmail.com 開發或部署。現有部署的跨帳戶遷移待資源費用核准。
 
 ## 本機
 
