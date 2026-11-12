@@ -16,5 +16,5 @@
 - 舊 D1、KV 與 Worker 保留備份，未刪除；既有 life-starry 未修改。
 - 全域及專案 AGENTS.md 已寫入永久規則；部署工具會先驗證 account.name，錯誤或無法驗證一律阻擋。
 
-## 尚需設定
-新付費帳戶的 life-api 尚無 STARRY_BATTERY_KEY。正式 AI_ENABLED=true（已有用量授權），但缺少服務金鑰時不會預留電池或執行 AI。請只在新帳戶的 Workers Secret 設定，不要再於舊帳戶設定或部署。
+## AI 設定驗證
+最終檢查已確認新付費帳戶的 life-api 存在 STARRY_BATTERY_KEY Secret、AI_ENABLED=true，健康檢查回傳 ai_ready=true。僅確認設定存在，未讀取或輸出金鑰；尚未以真實會員驗收 AI 解讀及電池扣款。後續 Secret 與部署一律只操作正確帳戶。
